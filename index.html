@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg">
+    <title>projectontologyallclass</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <style>
+    body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f4f4f4;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  background-color: #333;
+  color: white;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 24px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar button,
+.toolbar input,
+.toolbar select {
+  margin-left: 10px;
+  padding: 5px;
+  font-size: 14px;
+}
+
+.main {
+  display: flex;
+  flex-grow: 1;
+  position: relative;
+}
+
+.graph-component-container {
+  flex-grow: 1;
+  position: relative;
+  background-color: white;
+  border: 1px solid #ccc;
+  margin: 10px;
+  height: calc(100% - 20px);
+}
+
+.graph-overview-container {
+  width: 200px;
+  padding: 10px;
+  background-color: white;
+  border: 1px solid #ccc;
+  margin: 10px;
+  height: calc(100% - 20px);
+}
+
+.graph-overview-container .title {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+#node-type-legend {
+  width: 200px;
+}
+
+.separator {
+  border-left: 1px solid #ccc;
+  height: 20px;
+  margin: 0 10px;
+}
+
+.spacer {
+  flex-grow: 1;
+}
+
+  </style>
+  <body>
+    <div id="app">
+      <div class="header">
+        <div class="title">projectontologyallclass</div>
+        <div class="toolbar">
+          <button id="btn-increase-zoom" title="Increase Zoom" class="demo-icon-yIconZoomIn"></button>
+          <button id="btn-decrease-zoom" title="Decrease Zoom" class="demo-icon-yIconZoomOut"></button>
+          <button id="btn-fit-graph" title="Fit Graph Bounds" class="demo-icon-yIconZoomFit"></button>
+          <span class="separator"></span>
+          <button id="btn-export-svg" title="Export as SVG">SVG</button>
+          <button id="btn-export-png" title="Export as PNG">PNG</button>
+          <button id="btn-export-pdf" title="Export as PDF">PDF</button>
+          <span class="separator"></span>
+          <button id="btn-print" title="Print diagram" class="demo-icon-yIconPrint"></button>
+          <span class="spacer"></span>
+          <input type="file" id="nodes-file-input" accept=".csv" />
+          <input type="file" id="edges-file-input" accept=".csv" />
+          <button id="btn-load-graph">Load Graph</button>
+          <input id="graph-search-input" class="graph-search" placeholder="Search Nodes" />
+          <button id="btn-toggle-edge-labels">Toggle Edge Labels</button>
+          <select id="layout-options">
+            <option value="hierarchic">Hierarchic</option>
+            <option value="organic">Organic</option>
+            <option value="orthogonal">Orthogonal</option>
+            <option value="circular">Circular</option>
+          </select>
+          <button id="btn-apply-layout">Apply Layout</button>
+        </div>
+      </div>
+      <div class="main">
+        <div class="graph-component-container"></div>
+        <div class="graph-overview-container">
+          <div class="title">Overview</div>
+          <div id="graph-overview-component"></div>
+        </div>
+      </div>
+      <div style="position: absolute; bottom: 20px; right: 15px;">
+        <a href="https://yworks.com" target="_blank" style="margin: 10px;">
+          <img src="/src/assets/yWorksLogo.png" alt="yWorks Logo" style="height: 50px; width: 50px;">
+        </a>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
