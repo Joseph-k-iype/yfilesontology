@@ -11,16 +11,13 @@ import {
   ExteriorLabelModel,
   PolylineEdgeStyle,
   SolidColorFill,
-  Size,
   IGraph,
-} from 'yfiles'
-import {
-  HierarchicLayout,
-  OrganicLayout,
-  OrthogonalLayout,
-  CircularLayout,
   LayoutExecutor,
-  EdgeRouter
+  OrganicLayout,
+  HierarchicLayout,
+  CircularLayout,
+  OrthogonalLayout,
+  OrganicEdgeRouter
 } from 'yfiles'
 import { enableFolding } from './lib/FoldingSupport'
 import './lib/yFilesLicense'
@@ -32,8 +29,13 @@ import { initializeContextMenu } from './context-menu'
 import { initializeGraphSearch } from './graph-search'
 import { parse } from 'papaparse'
 
+let nodeLabelsVisible = false
+let edgeLabelsVisible = false
+let isLazyLoading = false
+let graphComponent: GraphComponent
+
 async function run() {
-  const graphComponent = await initializeGraphComponent()
+  graphComponent = await initializeGraphComponent()
   initializeToolbar(graphComponent)
   initializeGraphOverview(graphComponent)
   initializeTooltips(graphComponent)
@@ -41,6 +43,7 @@ async function run() {
   initializeGraphSearch(graphComponent)
   initializeFileUpload(graphComponent)
   initializeEdgeLabelToggle(graphComponent)
+  initializeNodeLabelToggle(graphComponent)
   initializeLayoutOptions(graphComponent)
   setupLevelOfDetail(graphComponent)
 }
@@ -146,19 +149,32 @@ async function updateGraph(graphComponent: GraphComponent, nodesData: any[], edg
   const nodeChunks = chunkArray(Array.from(uniqueNodes.values()), 1000)
   const edgeChunks = chunkArray(edgesData, 1000)
 
-  for (const nodeChunk of nodeChunks) {
-    await addNodes(graph, nodeChunk, typeColorMap, colors, colorIndex)
-    colorIndex += nodeChunk.length
-    await new Promise(requestAnimationFrame) // Yield to keep the UI responsive
+  let loadedNodeChunks = 0
+  let loadedEdgeChunks = 0
+
+  const addMoreChunks = async () => {
+    if (loadedNodeChunks < nodeChunks.length) {
+      await addNodes(graph, nodeChunks[loadedNodeChunks], typeColorMap, colors, colorIndex)
+      colorIndex += nodeChunks[loadedNodeChunks].length
+      loadedNodeChunks++
+    }
+    if (loadedEdgeChunks < edgeChunks.length) {
+      await addEdges(graph, edgeChunks[loadedEdgeChunks], colors)
+      loadedEdgeChunks++
+    }
   }
 
-  for (const edgeChunk of edgeChunks) {
-    await addEdges(graph, edgeChunk, colors)
-    await new Promise(requestAnimationFrame) // Yield to keep the UI responsive
-  }
+  graphComponent.addViewportChangedListener(async () => {
+    if (!isLazyLoading && (loadedNodeChunks < nodeChunks.length || loadedEdgeChunks < edgeChunks.length)) {
+      isLazyLoading = true
+      await addMoreChunks()
+      isLazyLoading = false
+    }
+  })
 
   graphComponent.fitGraphBounds()
   createLegend(graphComponent)
+  await applyInitialLayout(graphComponent)
 }
 
 async function addNodes(graph: IGraph, nodes: any[], typeColorMap: { [key: string]: string }, colors: string[], colorIndex: number) {
@@ -173,7 +189,9 @@ async function addNodes(graph: IGraph, nodes: any[], typeColorMap: { [key: strin
       tag: node,
       style
     })
-    graph.addLabel(nodeElement, node.label || "No Label", ExteriorLabelModel.SOUTH)
+    if (nodeLabelsVisible) {
+      graph.addLabel(nodeElement, node.label || "No Label", ExteriorLabelModel.SOUTH)
+    }
   })
 }
 
@@ -190,8 +208,8 @@ async function addEdges(graph: IGraph, edges: any[], colors: string[]) {
   })
 
   consolidatedEdges.forEach(edge => {
-    const sourceNode = graph.nodes.find((node: { tag: { id: string } }) => node.tag.id === edge.source)
-    const targetNode = graph.nodes.find((node: { tag: { id: string } }) => node.tag.id === edge.target)
+    const sourceNode = graph.nodes.find(node => node.tag.id === edge.source)
+    const targetNode = graph.nodes.find(node => node.tag.id === edge.target)
 
     if (sourceNode && targetNode) {
       const edgeStyle = new PolylineEdgeStyle({
@@ -203,7 +221,9 @@ async function addEdges(graph: IGraph, edges: any[], colors: string[]) {
         tag: edge,
         style: edgeStyle
       })
-      graph.addLabel(edgeElement, edge.edgeType || "No Type")
+      if (edgeLabelsVisible) {
+        graph.addLabel(edgeElement, edge.edgeType || "No Type")
+      }
     }
   })
 }
@@ -216,8 +236,21 @@ function chunkArray(array: any[], chunkSize: number): any[][] {
   return chunks
 }
 
+async function applyInitialLayout(graphComponent: GraphComponent) {
+  const layout = new OrganicLayout()
+  layout.minimumNodeDistance = 40
+  layout.nodeOverlapsAllowed = false
+
+  const layoutExecutor = new LayoutExecutor({
+    graphComponent,
+    layout,
+    duration: '2s',
+    animateViewport: true
+  })
+  await layoutExecutor.start()
+}
+
 function initializeEdgeLabelToggle(graphComponent: GraphComponent) {
-  let edgeLabelsVisible = true
   document.getElementById('btn-toggle-edge-labels')!.addEventListener('click', () => {
     edgeLabelsVisible = !edgeLabelsVisible
     if (edgeLabelsVisible) {
@@ -243,7 +276,36 @@ function hideEdgeLabels(graphComponent: GraphComponent) {
     const labels = edge.labels.toArray()
     labels.forEach(label => {
       graph.remove(label)
-   
+    })
+  })
+}
+
+function initializeNodeLabelToggle(graphComponent: GraphComponent) {
+  document.getElementById('btn-toggle-node-labels')!.addEventListener('click', () => {
+    nodeLabelsVisible = !nodeLabelsVisible
+    if (nodeLabelsVisible) {
+      showNodeLabels(graphComponent)
+    } else {
+      hideNodeLabels(graphComponent)
+    }
+  })
+}
+
+function showNodeLabels(graphComponent: GraphComponent) {
+  graphComponent.graph.nodes.forEach(node => {
+    if (node.labels.size === 0 && node.tag.label) {
+      graphComponent.graph.addLabel(node, node.tag.label)
+    }
+  })
+}
+
+function hideNodeLabels(graphComponent: GraphComponent) {
+  const graph = graphComponent.graph
+  const nodes = graph.nodes.toArray()
+  nodes.forEach(node => {
+    const labels = node.labels.toArray()
+    labels.forEach(label => {
+      graph.remove(label)
     })
   })
 }
@@ -266,21 +328,20 @@ function initializeLayoutOptions(graphComponent: GraphComponent) {
         layout = new CircularLayout()
         break
       default:
-        layout = new CircularLayout()
+        layout = new OrganicLayout() // Default to OrganicLayout
         break
     }
 
     const layoutExecutor = new LayoutExecutor(graphComponent, layout)
     await layoutExecutor.start()
 
-    applyEdgeRouting(graphComponent)
+    applyOrganicEdgeRouting(graphComponent)
   })
 }
 
-function applyEdgeRouting(graphComponent: GraphComponent) {
+function applyOrganicEdgeRouting(graphComponent: GraphComponent) {
   const graph = graphComponent.graph
-  const edgeRouter = new EdgeRouter()
-  edgeRouter.scope = 'route-all-edges'
+  const edgeRouter = new OrganicEdgeRouter()
 
   const layoutExecutor = new LayoutExecutor({
     graphComponent,
@@ -293,8 +354,44 @@ function applyEdgeRouting(graphComponent: GraphComponent) {
   })
 }
 
+function setupLevelOfDetail(graphComponent: GraphComponent) {
+  const graph = graphComponent.graph
+
+  graphComponent.addZoomChangedListener(() => {
+    const zoom = graphComponent.zoom
+    const showLabels = zoom > 0.7
+
+    graph.nodes.forEach(node => {
+      node.labels.toArray().forEach(label => {
+        if (showLabels && !label.tag) {
+          label.tag = 'visible'
+        } else if (!showLabels && label.tag === 'visible') {
+          label.tag = 'hidden'
+          graph.remove(label)
+        } else if (showLabels && label.tag === 'hidden') {
+          graph.addLabel(node, label.text, label.layoutParameter)
+          label.tag = 'visible'
+        }
+      })
+    })
+
+    graph.edges.forEach(edge => {
+      edge.labels.toArray().forEach(label => {
+        if (showLabels && !label.tag) {
+          label.tag = 'visible'
+        } else if (!showLabels && label.tag === 'visible') {
+          label.tag = 'hidden'
+          graph.remove(label)
+        } else if (showLabels && label.tag === 'hidden') {
+          graph.addLabel(edge, label.text, label.layoutParameter)
+          label.tag = 'visible'
+        }
+      })
+    })
+  })
+}
+
 function createLegend(graphComponent: GraphComponent) {
-  // Remove any existing legend
   const existingLegend = document.getElementById('node-type-legend')
   if (existingLegend) {
     existingLegend.remove()
@@ -348,43 +445,6 @@ function createLegend(graphComponent: GraphComponent) {
   }
 
   document.body.appendChild(legendContainer)
-}
-
-function setupLevelOfDetail(graphComponent: GraphComponent) {
-  const graph = graphComponent.graph
-
-  graphComponent.addZoomChangedListener(() => {
-    const zoom = graphComponent.zoom
-    const showLabels = zoom > 0.7
-
-    graph.nodes.forEach(node => {
-      node.labels.toArray().forEach(label => {
-        if (showLabels && !label.tag) {
-          label.tag = 'visible'
-        } else if (!showLabels && label.tag === 'visible') {
-          label.tag = 'hidden'
-          graph.remove(label)
-        } else if (showLabels && label.tag === 'hidden') {
-          graph.addLabel(node, label.text, label.layoutParameter)
-          label.tag = 'visible'
-        }
-      })
-    })
-
-    graph.edges.forEach(edge => {
-      edge.labels.toArray().forEach(label => {
-        if (showLabels && !label.tag) {
-          label.tag = 'visible'
-        } else if (!showLabels && label.tag === 'visible') {
-          label.tag = 'hidden'
-          graph.remove(label)
-        } else if (showLabels && label.tag === 'hidden') {
-          graph.addLabel(edge, label.text, label.layoutParameter)
-          label.tag = 'visible'
-        }
-      })
-    })
-  })
 }
 
 run()

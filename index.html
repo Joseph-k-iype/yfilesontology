@@ -9,89 +9,88 @@
   </head>
   <style>
     body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
-  background-color: #f4f4f4;
-  height: 100vh;
-  overflow: hidden;
-}
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      height: 100vh;
+      overflow: hidden;
+    }
 
-#app {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
 
-.header {
-  background-color: #333;
-  color: white;
-  padding: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+    .header {
+      background-color: #333;
+      color: white;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
 
-.title {
-  font-size: 24px;
-}
+    .title {
+      font-size: 24px;
+    }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-}
+    .toolbar {
+      display: flex;
+      align-items: center;
+    }
 
-.toolbar button,
-.toolbar input,
-.toolbar select {
-  margin-left: 10px;
-  padding: 5px;
-  font-size: 14px;
-}
+    .toolbar button,
+    .toolbar input,
+    .toolbar select {
+      margin-left: 10px;
+      padding: 5px;
+      font-size: 14px;
+    }
 
-.main {
-  display: flex;
-  flex-grow: 1;
-  position: relative;
-}
+    .main {
+      display: flex;
+      flex-grow: 1;
+      position: relative;
+    }
 
-.graph-component-container {
-  flex-grow: 1;
-  position: relative;
-  background-color: white;
-  border: 1px solid #ccc;
-  margin: 10px;
-  height: calc(100% - 20px);
-}
+    .graph-component-container {
+      flex-grow: 1;
+      position: relative;
+      background-color: white;
+      border: 1px solid #ccc;
+      margin: 10px;
+      height: calc(100% - 20px);
+    }
 
-.graph-overview-container {
-  width: 200px;
-  padding: 10px;
-  background-color: white;
-  border: 1px solid #ccc;
-  margin: 10px;
-  height: calc(100% - 20px);
-}
+    .graph-overview-container {
+      width: 200px;
+      padding: 10px;
+      background-color: white;
+      border: 1px solid #ccc;
+      margin: 10px;
+      height: calc(100% - 20px);
+    }
 
-.graph-overview-container .title {
-  font-size: 16px;
-  margin-bottom: 10px;
-}
+    .graph-overview-container .title {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
 
-#node-type-legend {
-  width: 200px;
-}
+    #node-type-legend {
+      width: 200px;
+    }
 
-.separator {
-  border-left: 1px solid #ccc;
-  height: 20px;
-  margin: 0 10px;
-}
+    .separator {
+      border-left: 1px solid #ccc;
+      height: 20px;
+      margin: 0 10px;
+    }
 
-.spacer {
-  flex-grow: 1;
-}
-
+    .spacer {
+      flex-grow: 1;
+    }
   </style>
   <body>
     <div id="app">
@@ -112,6 +111,7 @@
           <input type="file" id="edges-file-input" accept=".csv" />
           <button id="btn-load-graph">Load Graph</button>
           <input id="graph-search-input" class="graph-search" placeholder="Search Nodes" />
+          <button id="btn-toggle-node-labels">Toggle Node Labels</button>
           <button id="btn-toggle-edge-labels">Toggle Edge Labels</button>
           <select id="layout-options">
             <option value="hierarchic">Hierarchic</option>
