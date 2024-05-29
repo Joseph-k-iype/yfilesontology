@@ -10,7 +10,9 @@ import {
   ShapeNodeStyle,
   ExteriorLabelModel,
   PolylineEdgeStyle,
-  SolidColorFill
+  SolidColorFill,
+  Size,
+  IGraph,
 } from 'yfiles'
 import {
   HierarchicLayout,
@@ -40,6 +42,7 @@ async function run() {
   initializeFileUpload(graphComponent)
   initializeEdgeLabelToggle(graphComponent)
   initializeLayoutOptions(graphComponent)
+  setupLevelOfDetail(graphComponent)
 }
 
 async function initializeGraphComponent(): Promise<GraphComponent> {
@@ -125,7 +128,7 @@ function loadGraphFromFiles(graphComponent: GraphComponent, nodesFile: File, edg
   reader1.readAsText(nodesFile)
 }
 
-function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData: any[]) {
+async function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData: any[]) {
   const graph = graphComponent.graph
   graph.clear()
 
@@ -134,14 +137,32 @@ function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData
   const colors = ['#ff6f61', '#6b5b95', '#88b04b', '#f7cac9', '#92a8d1', '#955251', '#b565a7', '#009b77', '#dd4124', '#d65076']
 
   const uniqueNodes = new Map<string, any>()
-
   nodesData.forEach(node => {
     if (!uniqueNodes.has(node.id)) {
       uniqueNodes.set(node.id, node)
     }
   })
 
-  uniqueNodes.forEach(node => {
+  const nodeChunks = chunkArray(Array.from(uniqueNodes.values()), 1000)
+  const edgeChunks = chunkArray(edgesData, 1000)
+
+  for (const nodeChunk of nodeChunks) {
+    await addNodes(graph, nodeChunk, typeColorMap, colors, colorIndex)
+    colorIndex += nodeChunk.length
+    await new Promise(requestAnimationFrame) // Yield to keep the UI responsive
+  }
+
+  for (const edgeChunk of edgeChunks) {
+    await addEdges(graph, edgeChunk, colors)
+    await new Promise(requestAnimationFrame) // Yield to keep the UI responsive
+  }
+
+  graphComponent.fitGraphBounds()
+  createLegend(graphComponent)
+}
+
+async function addNodes(graph: IGraph, nodes: any[], typeColorMap: { [key: string]: string }, colors: string[], colorIndex: number) {
+  nodes.forEach(node => {
     if (!typeColorMap[node.type]) {
       typeColorMap[node.type] = colors[colorIndex % colors.length]
       colorIndex++
@@ -152,12 +173,14 @@ function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData
       tag: node,
       style
     })
-    graph.addLabel(nodeElement, node.label || "No Label", ExteriorLabelModel.SOUTH) // Move labels outside
+    graph.addLabel(nodeElement, node.label || "No Label", ExteriorLabelModel.SOUTH)
   })
+}
 
+async function addEdges(graph: IGraph, edges: any[], colors: string[]) {
   const consolidatedEdges = new Map<string, { source: string, target: string, count: number, edgeType: string }>()
 
-  edgesData.forEach(edge => {
+  edges.forEach(edge => {
     const edgeKey = `${edge.source}-${edge.target}`
     if (consolidatedEdges.has(edgeKey)) {
       consolidatedEdges.get(edgeKey)!.count += 1
@@ -167,8 +190,8 @@ function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData
   })
 
   consolidatedEdges.forEach(edge => {
-    const sourceNode = graph.nodes.find(node => node.tag.id === edge.source)
-    const targetNode = graph.nodes.find(node => node.tag.id === edge.target)
+    const sourceNode = graph.nodes.find((node: { tag: { id: string } }) => node.tag.id === edge.source)
+    const targetNode = graph.nodes.find((node: { tag: { id: string } }) => node.tag.id === edge.target)
 
     if (sourceNode && targetNode) {
       const edgeStyle = new PolylineEdgeStyle({
@@ -180,12 +203,17 @@ function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData
         tag: edge,
         style: edgeStyle
       })
-      graph.addLabel(edgeElement, edge.edgeType || "No Type") // Ensure there is always an edge label
+      graph.addLabel(edgeElement, edge.edgeType || "No Type")
     }
   })
+}
 
-  graphComponent.fitGraphBounds()
-  createLegend(graphComponent)
+function chunkArray(array: any[], chunkSize: number): any[][] {
+  const chunks: any[][] = []
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize))
+  }
+  return chunks
 }
 
 function initializeEdgeLabelToggle(graphComponent: GraphComponent) {
@@ -215,6 +243,7 @@ function hideEdgeLabels(graphComponent: GraphComponent) {
     const labels = edge.labels.toArray()
     labels.forEach(label => {
       graph.remove(label)
+   
     })
   })
 }
@@ -237,7 +266,7 @@ function initializeLayoutOptions(graphComponent: GraphComponent) {
         layout = new CircularLayout()
         break
       default:
-        layout = new OrganicLayout()
+        layout = new CircularLayout()
         break
     }
 
@@ -319,6 +348,43 @@ function createLegend(graphComponent: GraphComponent) {
   }
 
   document.body.appendChild(legendContainer)
+}
+
+function setupLevelOfDetail(graphComponent: GraphComponent) {
+  const graph = graphComponent.graph
+
+  graphComponent.addZoomChangedListener(() => {
+    const zoom = graphComponent.zoom
+    const showLabels = zoom > 0.7
+
+    graph.nodes.forEach(node => {
+      node.labels.toArray().forEach(label => {
+        if (showLabels && !label.tag) {
+          label.tag = 'visible'
+        } else if (!showLabels && label.tag === 'visible') {
+          label.tag = 'hidden'
+          graph.remove(label)
+        } else if (showLabels && label.tag === 'hidden') {
+          graph.addLabel(node, label.text, label.layoutParameter)
+          label.tag = 'visible'
+        }
+      })
+    })
+
+    graph.edges.forEach(edge => {
+      edge.labels.toArray().forEach(label => {
+        if (showLabels && !label.tag) {
+          label.tag = 'visible'
+        } else if (!showLabels && label.tag === 'visible') {
+          label.tag = 'hidden'
+          graph.remove(label)
+        } else if (showLabels && label.tag === 'hidden') {
+          graph.addLabel(edge, label.text, label.layoutParameter)
+          label.tag = 'visible'
+        }
+      })
+    })
+  })
 }
 
 run()
