@@ -1,450 +1,284 @@
-import './assets/icons/icons.css'
-import './style.css'
-import './dialog.css'
+import './assets/icons/icons.css';
+import './style.css';
+import './dialog.css';
 import {
   GraphComponent,
   GraphViewerInputMode,
   ICommand,
   ScrollBarVisibility,
   DefaultGraph,
-  ShapeNodeStyle,
-  ExteriorLabelModel,
   PolylineEdgeStyle,
-  SolidColorFill,
-  IGraph,
-  LayoutExecutor,
   OrganicLayout,
-  HierarchicLayout,
-  CircularLayout,
-  OrthogonalLayout,
-  OrganicEdgeRouter
-} from 'yfiles'
-import { enableFolding } from './lib/FoldingSupport'
-import './lib/yFilesLicense'
-import { initializeGraphOverview } from './graph-overview'
-import { initializeTooltips } from './tooltips'
-import { exportDiagram } from './diagram-export'
-import { PrintingSupport } from './lib/PrintingSupport'
-import { initializeContextMenu } from './context-menu'
-import { initializeGraphSearch } from './graph-search'
-import { parse } from 'papaparse'
+  ShinyPlateNodeStyle,
+  GraphBuilder,
+  Rect,
+  INode,
+  Matrix,
+  LayoutExecutor,
+  OrganicEdgeRouter,
+  ExteriorLabelModel,
+  ExteriorLabelModelPosition,
+} from 'yfiles';
+import { enableFolding } from './lib/FoldingSupport';
+import './lib/yFilesLicense';
+import { initializeGraphOverview } from './graph-overview';
+import { initializeTooltips } from './tooltips';
+import { exportDiagram } from './diagram-export';
+import { initializeContextMenu } from './context-menu';
+import { initializeGraphSearch } from './graph-search';
+import Papa from 'papaparse';
 
-let nodeLabelsVisible = false
-let edgeLabelsVisible = false
-let isLazyLoading = false
-let graphComponent: GraphComponent
+interface NodeData {
+  id: string;
+  type: string;
+  label?: string;
+}
+
+interface EdgeData {
+  source: string;
+  target: string;
+}
+
+let graphComponent: GraphComponent;
+let nodeLabelsVisible = true;
+const colorPalette = [
+  '#FF5733', '#33FF57', '#3357FF', '#FF33A8', '#FF8C33', '#33FF8C', '#8C33FF', '#FFD633',
+  '#33FFF3', '#F333FF', '#33FFBD', '#FF336E', '#33D1FF', '#FF8333', '#BFFF33', '#FF33F1'
+];
+const typeColors: { [key: string]: string } = {};
 
 async function run() {
-  graphComponent = await initializeGraphComponent()
-  initializeToolbar(graphComponent)
-  initializeGraphOverview(graphComponent)
-  initializeTooltips(graphComponent)
-  initializeContextMenu(graphComponent)
-  initializeGraphSearch(graphComponent)
-  initializeFileUpload(graphComponent)
-  initializeEdgeLabelToggle(graphComponent)
-  initializeNodeLabelToggle(graphComponent)
-  initializeLayoutOptions(graphComponent)
-  setupLevelOfDetail(graphComponent)
+  graphComponent = await initializeGraphComponent();
+  initializeToolbar(graphComponent);
+  initializeGraphOverview(graphComponent);
+  initializeTooltips(graphComponent);
+  initializeContextMenu(graphComponent);
+  initializeGraphSearch(graphComponent);
+  createLegend();
 }
 
 async function initializeGraphComponent(): Promise<GraphComponent> {
   const graphComponent = new GraphComponent(
     document.querySelector('.graph-component-container')!
-  )
-  graphComponent.horizontalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC
-  graphComponent.verticalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC
+  );
 
-  const mode = new GraphViewerInputMode()
-  mode.navigationInputMode.allowCollapseGroup = true
-  mode.navigationInputMode.allowEnterGroup = true
-  mode.navigationInputMode.allowExitGroup = true
-  mode.navigationInputMode.allowExpandGroup = true
-  graphComponent.inputMode = mode
+  graphComponent.horizontalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC;
+  graphComponent.verticalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC;
 
-  const graph = new DefaultGraph()
-  graphComponent.graph = enableFolding(graph)
-  graphComponent.fitGraphBounds()
+  const mode = new GraphViewerInputMode();
+  mode.navigationInputMode.allowCollapseGroup = true;
+  mode.navigationInputMode.allowEnterGroup = true;
+  mode.navigationInputMode.allowExitGroup = true;
+  mode.navigationInputMode.allowExpandGroup = true;
+  graphComponent.inputMode = mode;
 
-  return graphComponent
+  graphComponent.graph = enableFolding(new DefaultGraph());
+
+  return graphComponent;
 }
 
 function initializeToolbar(graphComponent: GraphComponent) {
-  document.getElementById('btn-increase-zoom')!.addEventListener('click', () => {
-    ICommand.INCREASE_ZOOM.execute(null, graphComponent)
-  })
+  document
+    .getElementById('btn-increase-zoom')!
+    .addEventListener('click', () => {
+      ICommand.INCREASE_ZOOM.execute(null, graphComponent);
+    });
 
-  document.getElementById('btn-decrease-zoom')!.addEventListener('click', () => {
-    ICommand.DECREASE_ZOOM.execute(null, graphComponent)
-  })
+  document
+    .getElementById('btn-decrease-zoom')!
+    .addEventListener('click', () => {
+      ICommand.DECREASE_ZOOM.execute(null, graphComponent);
+    });
 
   document.getElementById('btn-fit-graph')!.addEventListener('click', () => {
-    ICommand.FIT_GRAPH_BOUNDS.execute(null, graphComponent)
-  })
+    ICommand.FIT_GRAPH_BOUNDS.execute(null, graphComponent);
+  });
 
   document.getElementById('btn-export-svg')!.addEventListener('click', () => {
-    exportDiagram(graphComponent, 'svg')
-  })
+    exportDiagram(graphComponent, 'svg');
+  });
 
   document.getElementById('btn-export-png')!.addEventListener('click', () => {
-    exportDiagram(graphComponent, 'png')
-  })
+    exportDiagram(graphComponent, 'png');
+  });
 
   document.getElementById('btn-export-pdf')!.addEventListener('click', () => {
-    exportDiagram(graphComponent, 'pdf')
-  })
+    exportDiagram(graphComponent, 'pdf');
+  });
 
-  document.getElementById('btn-print')!.addEventListener('click', () => {
-    const printingSupport = new PrintingSupport()
-    printingSupport.printGraph(graphComponent.graph)
-  })
-}
+  document.getElementById('nodes-file-input')!.addEventListener('change', handleFileUpload);
+  document.getElementById('edges-file-input')!.addEventListener('change', handleFileUpload);
 
-function initializeFileUpload(graphComponent: GraphComponent) {
-  document.getElementById('btn-load-graph')!.addEventListener('click', () => {
-    const nodesFile = (document.getElementById('nodes-file-input') as HTMLInputElement).files?.[0]
-    const edgesFile = (document.getElementById('edges-file-input') as HTMLInputElement).files?.[0]
-
-    if (nodesFile && edgesFile) {
-      loadGraphFromFiles(graphComponent, nodesFile, edgesFile)
-    } else {
-      alert('Please select both nodes and edges files.')
-    }
-  })
-}
-
-function loadGraphFromFiles(graphComponent: GraphComponent, nodesFile: File, edgesFile: File) {
-  const reader1 = new FileReader()
-  reader1.onload = function (e) {
-    const nodesCSV = e.target?.result as string
-    const nodesData = parse(nodesCSV, { header: true }).data as any[]
-
-    const reader2 = new FileReader()
-    reader2.onload = function (e) {
-      const edgesCSV = e.target?.result as string
-      const edgesData = parse(edgesCSV, { header: true }).data as any[]
-
-      updateGraph(graphComponent, nodesData, edgesData)
-    }
-    reader2.readAsText(edgesFile)
-  }
-  reader1.readAsText(nodesFile)
-}
-
-async function updateGraph(graphComponent: GraphComponent, nodesData: any[], edgesData: any[]) {
-  const graph = graphComponent.graph
-  graph.clear()
-
-  const typeColorMap: { [key: string]: string } = {}
-  let colorIndex = 0
-  const colors = ['#ff6f61', '#6b5b95', '#88b04b', '#f7cac9', '#92a8d1', '#955251', '#b565a7', '#009b77', '#dd4124', '#d65076']
-
-  const uniqueNodes = new Map<string, any>()
-  nodesData.forEach(node => {
-    if (!uniqueNodes.has(node.id)) {
-      uniqueNodes.set(node.id, node)
-    }
-  })
-
-  const nodeChunks = chunkArray(Array.from(uniqueNodes.values()), 1000)
-  const edgeChunks = chunkArray(edgesData, 1000)
-
-  let loadedNodeChunks = 0
-  let loadedEdgeChunks = 0
-
-  const addMoreChunks = async () => {
-    if (loadedNodeChunks < nodeChunks.length) {
-      await addNodes(graph, nodeChunks[loadedNodeChunks], typeColorMap, colors, colorIndex)
-      colorIndex += nodeChunks[loadedNodeChunks].length
-      loadedNodeChunks++
-    }
-    if (loadedEdgeChunks < edgeChunks.length) {
-      await addEdges(graph, edgeChunks[loadedEdgeChunks], colors)
-      loadedEdgeChunks++
-    }
-  }
-
-  graphComponent.addViewportChangedListener(async () => {
-    if (!isLazyLoading && (loadedNodeChunks < nodeChunks.length || loadedEdgeChunks < edgeChunks.length)) {
-      isLazyLoading = true
-      await addMoreChunks()
-      isLazyLoading = false
-    }
-  })
-
-  graphComponent.fitGraphBounds()
-  createLegend(graphComponent)
-  await applyInitialLayout(graphComponent)
-}
-
-async function addNodes(graph: IGraph, nodes: any[], typeColorMap: { [key: string]: string }, colors: string[], colorIndex: number) {
-  nodes.forEach(node => {
-    if (!typeColorMap[node.type]) {
-      typeColorMap[node.type] = colors[colorIndex % colors.length]
-      colorIndex++
-    }
-    const style = new ShapeNodeStyle({ fill: new SolidColorFill(typeColorMap[node.type]), shape: 'ellipse' })
-    const nodeElement = graph.createNodeAt({
-      location: [Math.random() * 500, Math.random() * 500],
-      tag: node,
-      style
-    })
-    if (nodeLabelsVisible) {
-      graph.addLabel(nodeElement, node.label || "No Label", ExteriorLabelModel.SOUTH)
-    }
-  })
-}
-
-async function addEdges(graph: IGraph, edges: any[], colors: string[]) {
-  const consolidatedEdges = new Map<string, { source: string, target: string, count: number, edgeType: string }>()
-
-  edges.forEach(edge => {
-    const edgeKey = `${edge.source}-${edge.target}`
-    if (consolidatedEdges.has(edgeKey)) {
-      consolidatedEdges.get(edgeKey)!.count += 1
-    } else {
-      consolidatedEdges.set(edgeKey, { source: edge.source, target: edge.target, count: 1, edgeType: edge.edgeType })
-    }
-  })
-
-  consolidatedEdges.forEach(edge => {
-    const sourceNode = graph.nodes.find(node => node.tag.id === edge.source)
-    const targetNode = graph.nodes.find(node => node.tag.id === edge.target)
-
-    if (sourceNode && targetNode) {
-      const edgeStyle = new PolylineEdgeStyle({
-        stroke: `2px solid ${colors[Math.floor(Math.random() * colors.length)]}`
-      })
-      const edgeElement = graph.createEdge({
-        source: sourceNode,
-        target: targetNode,
-        tag: edge,
-        style: edgeStyle
-      })
-      if (edgeLabelsVisible) {
-        graph.addLabel(edgeElement, edge.edgeType || "No Type")
-      }
-    }
-  })
-}
-
-function chunkArray(array: any[], chunkSize: number): any[][] {
-  const chunks: any[][] = []
-  for (let i = 0; i < array.length; i += chunkSize) {
-    chunks.push(array.slice(i, i + chunkSize))
-  }
-  return chunks
-}
-
-async function applyInitialLayout(graphComponent: GraphComponent) {
-  const layout = new OrganicLayout()
-  layout.minimumNodeDistance = 40
-  layout.nodeOverlapsAllowed = false
-
-  const layoutExecutor = new LayoutExecutor({
-    graphComponent,
-    layout,
-    duration: '2s',
-    animateViewport: true
-  })
-  await layoutExecutor.start()
-}
-
-function initializeEdgeLabelToggle(graphComponent: GraphComponent) {
-  document.getElementById('btn-toggle-edge-labels')!.addEventListener('click', () => {
-    edgeLabelsVisible = !edgeLabelsVisible
-    if (edgeLabelsVisible) {
-      showEdgeLabels(graphComponent)
-    } else {
-      hideEdgeLabels(graphComponent)
-    }
-  })
-}
-
-function showEdgeLabels(graphComponent: GraphComponent) {
-  graphComponent.graph.edges.forEach(edge => {
-    if (edge.labels.size === 0 && edge.tag.edgeType) {
-      graphComponent.graph.addLabel(edge, edge.tag.edgeType)
-    }
-  })
-}
-
-function hideEdgeLabels(graphComponent: GraphComponent) {
-  const graph = graphComponent.graph
-  const edges = graph.edges.toArray()
-  edges.forEach(edge => {
-    const labels = edge.labels.toArray()
-    labels.forEach(label => {
-      graph.remove(label)
-    })
-  })
-}
-
-function initializeNodeLabelToggle(graphComponent: GraphComponent) {
   document.getElementById('btn-toggle-node-labels')!.addEventListener('click', () => {
-    nodeLabelsVisible = !nodeLabelsVisible
-    if (nodeLabelsVisible) {
-      showNodeLabels(graphComponent)
-    } else {
-      hideNodeLabels(graphComponent)
+    nodeLabelsVisible = !nodeLabelsVisible;
+    toggleNodeLabels(nodeLabelsVisible);
+  });
+}
+
+async function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) return;
+
+  const file = input.files[0];
+  const fileType = input.id === 'nodes-file-input' ? 'nodes' : 'edges';
+
+  const fileData = await file.text();
+  const parsedData = Papa.parse(fileData, { header: true }).data;
+
+  if (fileType === 'nodes') {
+    (window as any).uploadedNodes = parsedData;
+  } else {
+    (window as any).uploadedEdges = parsedData;
+  }
+
+  if ((window as any).uploadedNodes && (window as any).uploadedEdges) {
+    loadAndProcessCSVFiles(graphComponent, (window as any).uploadedNodes, (window as any).uploadedEdges);
+  }
+}
+
+async function loadAndProcessCSVFiles(graphComponent: GraphComponent, nodes: NodeData[], edges: EdgeData[]) {
+  // Remove duplicate nodes
+  const uniqueNodes = Array.from(new Map(nodes.map(node => [node.id, node])).values());
+
+  const graphBuilder = new GraphBuilder(graphComponent.graph);
+
+  const nodeSource = graphBuilder.createNodesSource({
+    data: uniqueNodes,
+    id: 'id',
+    tag: (data: NodeData) => data.type,
+    layout: () => new Rect(Math.random() * 800, Math.random() * 600, 30, 30),
+  });
+
+  const edgeSource = graphBuilder.createEdgesSource({
+    data: edges,
+    sourceId: 'source',
+    targetId: 'target'
+  });
+
+  const edgeStyle = new PolylineEdgeStyle({
+    stroke: '2px solid black',
+    targetArrow: 'default'
+  });
+  graphComponent.graph.edgeDefaults.style = edgeStyle;
+
+  nodeSource.nodeCreator.createLabelBinding((data: NodeData) => data.label || '');
+  nodeSource.nodeCreator.addNodeCreatedListener((sender, event) => {
+    const node = event.item as INode;
+    const type = event.dataItem.type;
+    if (!typeColors[type]) {
+      typeColors[type] = colorPalette[Object.keys(typeColors).length % colorPalette.length];
     }
-  })
-}
+    const color = typeColors[type];
+    const nodeStyle = new ShinyPlateNodeStyle({ fill: color });
+    graphComponent.graph.setStyle(node, nodeStyle); // Set the style for the node
+  });
 
-function showNodeLabels(graphComponent: GraphComponent) {
-  graphComponent.graph.nodes.forEach(node => {
-    if (node.labels.size === 0 && node.tag.label) {
-      graphComponent.graph.addLabel(node, node.tag.label)
+  const labelModel = new ExteriorLabelModel({ insets: 5 });
+  nodeSource.nodeCreator.addNodeCreatedListener((sender, args) => {
+    const label = args.item.labels.first();
+    if (label) {
+      graphComponent.graph.setLabelLayoutParameter(label, labelModel.createParameter(ExteriorLabelModelPosition.SOUTH));
     }
-  })
-}
+  });
 
-function hideNodeLabels(graphComponent: GraphComponent) {
-  const graph = graphComponent.graph
-  const nodes = graph.nodes.toArray()
-  nodes.forEach(node => {
-    const labels = node.labels.toArray()
-    labels.forEach(label => {
-      graph.remove(label)
-    })
-  })
-}
+  graphBuilder.buildGraph();
 
-function initializeLayoutOptions(graphComponent: GraphComponent) {
-  document.getElementById('btn-apply-layout')!.addEventListener('click', async () => {
-    const layoutOption = (document.getElementById('layout-options') as HTMLSelectElement).value
-    let layout
-    switch (layoutOption) {
-      case 'hierarchic':
-        layout = new HierarchicLayout()
-        break
-      case 'organic':
-        layout = new OrganicLayout()
-        break
-      case 'orthogonal':
-        layout = new OrthogonalLayout()
-        break
-      case 'circular':
-        layout = new CircularLayout()
-        break
-      default:
-        layout = new OrganicLayout() // Default to OrganicLayout
-        break
-    }
+  // Apply OrganicLayout with specific settings
+  const layout = new OrganicLayout();
+  layout.minimumNodeDistance = 40;
+  layout.nodeOverlapsAllowed = false;
+  await graphComponent.morphLayout(layout, '1s');
 
-    const layoutExecutor = new LayoutExecutor(graphComponent, layout)
-    await layoutExecutor.start()
-
-    applyOrganicEdgeRouting(graphComponent)
-  })
-}
-
-function applyOrganicEdgeRouting(graphComponent: GraphComponent) {
-  const graph = graphComponent.graph
-  const edgeRouter = new OrganicEdgeRouter()
-
+  // Apply OrganicEdgeRouter for edge bundling
+  const edgeRouter = new OrganicEdgeRouter();
   const layoutExecutor = new LayoutExecutor({
     graphComponent,
     layout: edgeRouter,
     duration: '1s',
-    animateViewport: true
-  })
-  layoutExecutor.start().catch(error => {
-    console.error('Edge routing failed: ' + error)
-  })
+    animateViewport: true,
+  });
+  await layoutExecutor.start();
+
+  // Apply isometric projection to the final node positions
+  applyIsometricProjection(graphComponent);
+
+  graphComponent.fitGraphBounds();
+  graphComponent.zoom = 1.0; // Default zoom ratio
+
+  // Update the legend with dynamically assigned colors
+  createLegend();
 }
 
-function setupLevelOfDetail(graphComponent: GraphComponent) {
-  const graph = graphComponent.graph
-
-  graphComponent.addZoomChangedListener(() => {
-    const zoom = graphComponent.zoom
-    const showLabels = zoom > 0.7
-
-    graph.nodes.forEach(node => {
-      node.labels.toArray().forEach(label => {
-        if (showLabels && !label.tag) {
-          label.tag = 'visible'
-        } else if (!showLabels && label.tag === 'visible') {
-          label.tag = 'hidden'
-          graph.remove(label)
-        } else if (showLabels && label.tag === 'hidden') {
-          graph.addLabel(node, label.text, label.layoutParameter)
-          label.tag = 'visible'
-        }
-      })
-    })
-
-    graph.edges.forEach(edge => {
-      edge.labels.toArray().forEach(label => {
-        if (showLabels && !label.tag) {
-          label.tag = 'visible'
-        } else if (!showLabels && label.tag === 'visible') {
-          label.tag = 'hidden'
-          graph.remove(label)
-        } else if (showLabels && label.tag === 'hidden') {
-          graph.addLabel(edge, label.text, label.layoutParameter)
-          label.tag = 'visible'
-        }
-      })
-    })
-  })
+function applyIsometricProjection(graphComponent: GraphComponent) {
+  const isometricMatrix = new Matrix(
+    Math.cos(Math.PI / 6), -Math.cos(Math.PI / 6),
+    Math.sin(Math.PI / 6), Math.sin(Math.PI / 6),
+    0, 0
+  );
+  graphComponent.projection = isometricMatrix;
 }
 
-function createLegend(graphComponent: GraphComponent) {
-  const existingLegend = document.getElementById('node-type-legend')
-  if (existingLegend) {
-    existingLegend.remove()
+function getColorForType(type: string): string {
+  if (!typeColors[type]) {
+    typeColors[type] = colorPalette[Object.keys(typeColors).length % colorPalette.length];
+  }
+  return typeColors[type];
+}
+
+function createLegend() {
+  const legendContainer = document.getElementById('legend') || document.createElement('div');
+  legendContainer.id = 'legend';
+  legendContainer.innerHTML = ''; // Clear existing content
+  legendContainer.style.position = 'absolute';
+  legendContainer.style.right = '10px';
+  legendContainer.style.top = '10px';
+  legendContainer.style.backgroundColor = 'white';
+  legendContainer.style.border = '1px solid black';
+  legendContainer.style.padding = '10px';
+
+  const legendTitle = document.createElement('div');
+  legendTitle.style.fontWeight = 'bold';
+  legendTitle.style.marginBottom = '5px';
+  legendTitle.textContent = 'Node Type Legend';
+  legendContainer.appendChild(legendTitle);
+
+  for (const type in typeColors) {
+    const legendItem = document.createElement('div');
+    legendItem.style.display = 'flex';
+    legendItem.style.alignItems = 'center';
+    legendItem.style.marginBottom = '5px';
+
+    const colorBox = document.createElement('div');
+    colorBox.style.width = '15px';
+    colorBox.style.height = '15px';
+    colorBox.style.backgroundColor = typeColors[type];
+    colorBox.style.marginRight = '5px';
+    legendItem.appendChild(colorBox);
+
+    const typeLabel = document.createElement('span');
+    typeLabel.textContent = type;
+    legendItem.appendChild(typeLabel);
+
+    legendContainer.appendChild(legendItem);
   }
 
-  const legendContainer = document.createElement('div')
-  legendContainer.id = 'node-type-legend'
-  legendContainer.style.position = 'absolute'
-  legendContainer.style.top = '50px'
-  legendContainer.style.right = '10px'
-  legendContainer.style.backgroundColor = 'white'
-  legendContainer.style.border = '1px solid #ccc'
-  legendContainer.style.padding = '10px'
-  legendContainer.style.zIndex = '1000'
+  document.body.appendChild(legendContainer);
+}
 
-  const legendTitle = document.createElement('div')
-  legendTitle.style.fontWeight = 'bold'
-  legendTitle.style.marginBottom = '5px'
-  legendTitle.textContent = 'Node Type Legend'
-  legendContainer.appendChild(legendTitle)
-
-  const typeColorMap: { [key: string]: string } = {}
-  graphComponent.graph.nodes.forEach(node => {
-    const nodeType = node.tag.type
-    if (nodeType && !typeColorMap[nodeType]) {
-      const nodeStyle = node.style as ShapeNodeStyle
-      if (nodeStyle.fill instanceof SolidColorFill) {
-        typeColorMap[nodeType] = nodeStyle.fill.color.toString()
+function toggleNodeLabels(visible: boolean) {
+  const graph = graphComponent.graph;
+  graph.nodes.forEach(node => {
+    if (visible) {
+      const labelModel = new ExteriorLabelModel({ insets: 5 });
+      if (node.labels.size === 0) {
+        graph.addLabel(node, node.tag, labelModel.createParameter(ExteriorLabelModelPosition.SOUTH));
       }
+    } else {
+      node.labels.toArray().forEach(label => {
+        graph.remove(label);
+      });
     }
-  })
-
-  for (const [type, color] of Object.entries(typeColorMap)) {
-    const legendItem = document.createElement('div')
-    legendItem.style.display = 'flex'
-    legendItem.style.alignItems = 'center'
-    legendItem.style.marginBottom = '5px'
-
-    const colorBox = document.createElement('div')
-    colorBox.style.width = '15px'
-    colorBox.style.height = '15px'
-    colorBox.style.backgroundColor = color
-    colorBox.style.marginRight = '5px'
-    legendItem.appendChild(colorBox)
-
-    const typeLabel = document.createElement('div')
-    typeLabel.textContent = type
-    legendItem.appendChild(typeLabel)
-
-    legendContainer.appendChild(legendItem)
-  }
-
-  document.body.appendChild(legendContainer)
+  });
 }
 
-run()
+run();

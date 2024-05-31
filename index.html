@@ -4,98 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.svg">
-    <title>projectontologyallclass</title>
-    <link rel="stylesheet" href="style.css">
+    <title>test</title>
   </head>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f4f4f4;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    .header {
-      background-color: #333;
-      color: white;
-      padding: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .title {
-      font-size: 24px;
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-    }
-
-    .toolbar button,
-    .toolbar input,
-    .toolbar select {
-      margin-left: 10px;
-      padding: 5px;
-      font-size: 14px;
-    }
-
-    .main {
-      display: flex;
-      flex-grow: 1;
-      position: relative;
-    }
-
-    .graph-component-container {
-      flex-grow: 1;
-      position: relative;
-      background-color: white;
-      border: 1px solid #ccc;
-      margin: 10px;
-      height: calc(100% - 20px);
-    }
-
-    .graph-overview-container {
-      width: 200px;
-      padding: 10px;
-      background-color: white;
-      border: 1px solid #ccc;
-      margin: 10px;
-      height: calc(100% - 20px);
-    }
-
-    .graph-overview-container .title {
-      font-size: 16px;
-      margin-bottom: 10px;
-    }
-
-    #node-type-legend {
-      width: 200px;
-    }
-
-    .separator {
-      border-left: 1px solid #ccc;
-      height: 20px;
-      margin: 0 10px;
-    }
-
-    .spacer {
-      flex-grow: 1;
-    }
-  </style>
   <body>
     <div id="app">
       <div class="header">
-        <div class="title">projectontologyallclass</div>
+        <div class="title">test</div>
         <div class="toolbar">
           <button id="btn-increase-zoom" title="Increase Zoom" class="demo-icon-yIconZoomIn"></button>
           <button id="btn-decrease-zoom" title="Decrease Zoom" class="demo-icon-yIconZoomOut"></button>
@@ -105,21 +19,13 @@
           <button id="btn-export-png" title="Export as PNG">PNG</button>
           <button id="btn-export-pdf" title="Export as PDF">PDF</button>
           <span class="separator"></span>
-          <button id="btn-print" title="Print diagram" class="demo-icon-yIconPrint"></button>
-          <span class="spacer"></span>
+          <label for="nodes-file-input">Nodes CSV:</label>
           <input type="file" id="nodes-file-input" accept=".csv" />
+          <label for="edges-file-input">Edges CSV:</label>
           <input type="file" id="edges-file-input" accept=".csv" />
-          <button id="btn-load-graph">Load Graph</button>
+          <span class="spacer"></span>
           <input id="graph-search-input" class="graph-search" placeholder="Search Nodes" />
-          <button id="btn-toggle-node-labels">Toggle Node Labels</button>
-          <button id="btn-toggle-edge-labels">Toggle Edge Labels</button>
-          <select id="layout-options">
-            <option value="hierarchic">Hierarchic</option>
-            <option value="organic">Organic</option>
-            <option value="orthogonal">Orthogonal</option>
-            <option value="circular">Circular</option>
-          </select>
-          <button id="btn-apply-layout">Apply Layout</button>
+          <button id="btn-toggle-node-labels" title="Toggle Node Labels">Toggle Labels</button>
         </div>
       </div>
       <div class="main">
